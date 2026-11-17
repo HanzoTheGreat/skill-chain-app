@@ -57,9 +57,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
       RustLibWire.fromExternalLibrary;
 
   @override
-  Future<void> executeRustInitializers() async {
-    await api.crateApiSimpleInitApp();
-  }
+  Future<void> executeRustInitializers() async {}
 
   @override
   ExternalLibraryLoaderConfig get defaultExternalLibraryLoaderConfig =>
@@ -69,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -915035150;
+  int get rustContentHash => -829952175;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -81,11 +79,12 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  Future<Skill> crateApiSimpleAddCustomSkill({
+  Future<PlatformInt64> crateApiSimpleAddCustomSkill({
     required String title,
     required String description,
     required TensionZone zone,
     required bool onlyPrivate,
+    required int durationSeconds,
   });
 
   Future<PlatformInt64> crateApiSimpleCreateChain({
@@ -106,8 +105,6 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<Skill>> crateApiSimpleGetSkills({TensionZone? zoneFilter});
 
-  Future<void> crateApiSimpleInitApp();
-
   Future<void> crateApiSimpleInitDb({required String appDir});
 
   Future<void> crateApiSimpleSetActiveChainForMode({
@@ -116,10 +113,6 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<void> crateApiSimpleSetPublicMode({required bool isOutInPublic});
-
-  Future<TensionZone> crateApiSimpleTensionZoneFromDbInt({required int val});
-
-  Future<int> crateApiSimpleTensionZoneToDbInt({required TensionZone that});
 
   Future<void> crateApiSimpleUpdateChainSteps({
     required PlatformInt64 chainId,
@@ -132,6 +125,7 @@ abstract class RustLibApi extends BaseApi {
     required String description,
     required TensionZone zone,
     required bool onlyPrivate,
+    required int durationSeconds,
   });
 }
 
@@ -144,11 +138,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
-  Future<Skill> crateApiSimpleAddCustomSkill({
+  Future<PlatformInt64> crateApiSimpleAddCustomSkill({
     required String title,
     required String description,
     required TensionZone zone,
     required bool onlyPrivate,
+    required int durationSeconds,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -158,6 +153,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(description, serializer);
           sse_encode_tension_zone(zone, serializer);
           sse_encode_bool(onlyPrivate, serializer);
+          sse_encode_i_32(durationSeconds, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -166,11 +162,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_skill,
+          decodeSuccessData: sse_decode_i_64,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiSimpleAddCustomSkillConstMeta,
-        argValues: [title, description, zone, onlyPrivate],
+        argValues: [title, description, zone, onlyPrivate, durationSeconds],
         apiImpl: this,
       ),
     );
@@ -179,7 +175,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiSimpleAddCustomSkillConstMeta =>
       const TaskConstMeta(
         debugName: "add_custom_skill",
-        argNames: ["title", "description", "zone", "onlyPrivate"],
+        argNames: [
+          "title",
+          "description",
+          "zone",
+          "onlyPrivate",
+          "durationSeconds",
+        ],
       );
 
   @override
@@ -362,33 +364,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_skills", argNames: ["zoneFilter"]);
 
   @override
-  Future<void> crateApiSimpleInitApp() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 8,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiSimpleInitAppConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiSimpleInitAppConstMeta =>
-      const TaskConstMeta(debugName: "init_app", argNames: []);
-
-  @override
   Future<void> crateApiSimpleInitDb({required String appDir}) {
     return handler.executeNormal(
       NormalTask(
@@ -398,7 +373,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 8,
             port: port_,
           );
         },
@@ -430,7 +405,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 9,
             port: port_,
           );
         },
@@ -461,7 +436,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 10,
             port: port_,
           );
         },
@@ -483,68 +458,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<TensionZone> crateApiSimpleTensionZoneFromDbInt({required int val}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_32(val, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 12,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_tension_zone,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiSimpleTensionZoneFromDbIntConstMeta,
-        argValues: [val],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiSimpleTensionZoneFromDbIntConstMeta =>
-      const TaskConstMeta(
-        debugName: "tension_zone_from_db_int",
-        argNames: ["val"],
-      );
-
-  @override
-  Future<int> crateApiSimpleTensionZoneToDbInt({required TensionZone that}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_tension_zone(that, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 13,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_i_32,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiSimpleTensionZoneToDbIntConstMeta,
-        argValues: [that],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiSimpleTensionZoneToDbIntConstMeta =>
-      const TaskConstMeta(
-        debugName: "tension_zone_to_db_int",
-        argNames: ["that"],
-      );
-
-  @override
   Future<void> crateApiSimpleUpdateChainSteps({
     required PlatformInt64 chainId,
     required Int64List orderedSkillIds,
@@ -558,7 +471,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 11,
             port: port_,
           );
         },
@@ -586,6 +499,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String description,
     required TensionZone zone,
     required bool onlyPrivate,
+    required int durationSeconds,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -596,10 +510,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(description, serializer);
           sse_encode_tension_zone(zone, serializer);
           sse_encode_bool(onlyPrivate, serializer);
+          sse_encode_i_32(durationSeconds, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 12,
             port: port_,
           );
         },
@@ -608,7 +523,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiSimpleUpdateSkillConstMeta,
-        argValues: [skillId, title, description, zone, onlyPrivate],
+        argValues: [
+          skillId,
+          title,
+          description,
+          zone,
+          onlyPrivate,
+          durationSeconds,
+        ],
         apiImpl: this,
       ),
     );
@@ -616,7 +538,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiSimpleUpdateSkillConstMeta => const TaskConstMeta(
     debugName: "update_skill",
-    argNames: ["skillId", "title", "description", "zone", "onlyPrivate"],
+    argNames: [
+      "skillId",
+      "title",
+      "description",
+      "zone",
+      "onlyPrivate",
+      "durationSeconds",
+    ],
   );
 
   @protected
@@ -695,15 +624,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Skill dco_decode_skill(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return Skill(
       id: dco_decode_i_64(arr[0]),
       title: dco_decode_String(arr[1]),
       description: dco_decode_String(arr[2]),
       zone: dco_decode_tension_zone(arr[3]),
-      onlyPrivate: dco_decode_bool(arr[4]),
-      isCustom: dco_decode_bool(arr[5]),
+      isCustom: dco_decode_bool(arr[4]),
+      onlyPrivate: dco_decode_bool(arr[5]),
+      durationSeconds: dco_decode_i_32(arr[6]),
     );
   }
 
@@ -850,15 +780,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_title = sse_decode_String(deserializer);
     var var_description = sse_decode_String(deserializer);
     var var_zone = sse_decode_tension_zone(deserializer);
-    var var_onlyPrivate = sse_decode_bool(deserializer);
     var var_isCustom = sse_decode_bool(deserializer);
+    var var_onlyPrivate = sse_decode_bool(deserializer);
+    var var_durationSeconds = sse_decode_i_32(deserializer);
     return Skill(
       id: var_id,
       title: var_title,
       description: var_description,
       zone: var_zone,
-      onlyPrivate: var_onlyPrivate,
       isCustom: var_isCustom,
+      onlyPrivate: var_onlyPrivate,
+      durationSeconds: var_durationSeconds,
     );
   }
 
@@ -1013,8 +945,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.title, serializer);
     sse_encode_String(self.description, serializer);
     sse_encode_tension_zone(self.zone, serializer);
-    sse_encode_bool(self.onlyPrivate, serializer);
     sse_encode_bool(self.isCustom, serializer);
+    sse_encode_bool(self.onlyPrivate, serializer);
+    sse_encode_i_32(self.durationSeconds, serializer);
   }
 
   @protected

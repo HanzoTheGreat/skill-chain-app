@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -6,6 +7,24 @@ import 'src/rust/api/simple.dart';
 import 'src/rust/frb_generated.dart';
 
 const _widgetChannel = MethodChannel('skill_chain_app/widget');
+
+/// Formatiert Sekunden kompakt für Badges (z. B. "30s", "1:30m", "2m")
+String _formatDurationCompact(int seconds) {
+  if (seconds <= 0) return '';
+  final mins = seconds ~/ 60;
+  final secs = seconds % 60;
+  if (mins == 0) return '${secs}s';
+  if (secs == 0) return '${mins}m';
+  return '$mins:${secs.toString().padLeft(2, '0')}m';
+}
+
+/// Formatiert Sekunden als große Digitaluhr (z. B. "01:30")
+String _formatClock(int seconds) {
+  final safe = seconds < 0 ? 0 : seconds;
+  final mins = (safe ~/ 60).toString().padLeft(2, '0');
+  final secs = (safe % 60).toString().padLeft(2, '0');
+  return '$mins:$secs';
+}
 
 /// Prüft, ob auf dem Homescreen-Widget der Modus geändert wurde, und synchronisiert SQLite.
 Future<bool> _resolveAndSyncPublicMode() async {
@@ -267,7 +286,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 }
 
 // ============================================================================
-// TAB 1: SKILL-ZENTRALE & NOTFALLKNOPF
+// TAB 1: SKILL-ZENTRALE & NOTFALLKNOPF (inkl. Timer-Konfiguration im Editor)
 // ============================================================================
 
 class SkillDashboardTab extends StatefulWidget {
@@ -330,8 +349,21 @@ class _SkillDashboardTabState extends State<SkillDashboardTab> {
     final descCtrl = TextEditingController(
       text: existingSkill?.description ?? '',
     );
+    final initialSec = existingSkill?.durationSeconds ?? 0;
+    final durationCtrl = TextEditingController(
+      text: initialSec > 0 ? initialSec.toString() : '',
+    );
     TensionZone dialogZone = existingSkill?.zone ?? _selectedZone;
     bool onlyPrivate = existingSkill?.onlyPrivate ?? false;
+    int selectedSeconds = initialSec;
+
+    const presets = <(int, String)>[
+      (0, 'Kein Timer'),
+      (30, '30 Sek.'),
+      (60, '1 Min.'),
+      (120, '2 Min.'),
+      (300, '5 Min.'),
+    ];
 
     final saved = await showDialog<bool>(
       context: context,
@@ -358,7 +390,7 @@ class _SkillDashboardTabState extends State<SkillDashboardTab> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: descCtrl,
-                      maxLines: 4,
+                      maxLines: 3,
                       decoration: const InputDecoration(
                         labelText: 'Konkrete Handlungsanweisung',
                         hintText: 'Was genau musst du tun?',
@@ -397,6 +429,54 @@ class _SkillDashboardTabState extends State<SkillDashboardTab> {
                         }
                       },
                     ),
+                    const SizedBox(height: 16),
+                    const Row(
+                      children: [
+                        Icon(Icons.timer_outlined, size: 18, color: Color(0xFF4FC3F7)),
+                        SizedBox(width: 6),
+                        Text(
+                          'Countdown-Timer (Haptisch & Optisch):',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: presets.map((preset) {
+                        final (sec, label) = preset;
+                        final isChosen = selectedSeconds == sec;
+                        return ChoiceChip(
+                          label: Text(label),
+                          selected: isChosen,
+                          onSelected: (_) {
+                            setDialogState(() {
+                              selectedSeconds = sec;
+                              durationCtrl.text =
+                                  sec > 0 ? sec.toString() : '';
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: durationCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        labelText: 'Eigene Dauer in Sekunden (optional)',
+                        hintText: 'Leer oder 0 = Kein Timer (z.B. 45 für 45 Sek.)',
+                        suffixText: 'Sek.',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (val) {
+                        setDialogState(() {
+                          selectedSeconds = int.tryParse(val.trim()) ?? 0;
+                        });
+                      },
+                    ),
                     const SizedBox(height: 12),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
@@ -421,6 +501,8 @@ class _SkillDashboardTabState extends State<SkillDashboardTab> {
                 FilledButton(
                   onPressed: () async {
                     if (titleCtrl.text.trim().isEmpty) return;
+                    final parsedDuration =
+                        int.tryParse(durationCtrl.text.trim()) ?? 0;
                     if (isEditing) {
                       await updateSkill(
                         skillId: existingSkill.id,
@@ -428,6 +510,7 @@ class _SkillDashboardTabState extends State<SkillDashboardTab> {
                         description: descCtrl.text.trim(),
                         zone: dialogZone,
                         onlyPrivate: onlyPrivate,
+                        durationSeconds: parsedDuration,
                       );
                     } else {
                       await addCustomSkill(
@@ -435,6 +518,7 @@ class _SkillDashboardTabState extends State<SkillDashboardTab> {
                         description: descCtrl.text.trim(),
                         zone: dialogZone,
                         onlyPrivate: onlyPrivate,
+                        durationSeconds: parsedDuration,
                       );
                     }
                     if (ctx.mounted) Navigator.pop(ctx, true);
@@ -579,13 +663,53 @@ class _SkillDashboardTabState extends State<SkillDashboardTab> {
                                       ),
                                     ),
                                   ),
+                                  if (skill.durationSeconds > 0)
+                                    Container(
+                                      margin: const EdgeInsets.only(left: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF4FC3F7)
+                                            .withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: const Color(0xFF4FC3F7),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.timer_outlined,
+                                            size: 13,
+                                            color: Color(0xFF4FC3F7),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _formatDurationCompact(
+                                              skill.durationSeconds,
+                                            ),
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF4FC3F7),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   if (skill.onlyPrivate)
-                                    const Tooltip(
-                                      message: 'Nur Privat / Zuhause',
-                                      child: Icon(
-                                        Icons.lock_outline,
-                                        size: 18,
-                                        color: Colors.amberAccent,
+                                    const Padding(
+                                      padding: EdgeInsets.only(left: 6.0),
+                                      child: Tooltip(
+                                        message: 'Nur Privat / Zuhause',
+                                        child: Icon(
+                                          Icons.lock_outline,
+                                          size: 18,
+                                          color: Colors.amberAccent,
+                                        ),
                                       ),
                                     ),
                                 ],
@@ -850,6 +974,18 @@ class _ChainBuilderTabState extends State<ChainBuilderTab> {
                         title: Row(
                           children: [
                             Expanded(child: Text(s.title)),
+                            if (s.durationSeconds > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 6.0),
+                                child: Text(
+                                  '⏱️ ${_formatDurationCompact(s.durationSeconds)}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF4FC3F7),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                             if (s.onlyPrivate)
                               const Padding(
                                 padding: EdgeInsets.only(left: 6.0),
@@ -1089,6 +1225,18 @@ class _ChainBuilderTabState extends State<ChainBuilderTab> {
                                   ),
                                 ),
                               ),
+                              if (skill.durationSeconds > 0)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 4.0),
+                                  child: Text(
+                                    '⏱️${_formatDurationCompact(skill.durationSeconds)}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF4FC3F7),
+                                    ),
+                                  ),
+                                ),
                               if (skill.onlyPrivate)
                                 const Padding(
                                   padding: EdgeInsets.only(left: 4.0),
@@ -1139,7 +1287,7 @@ class _ChainBuilderTabState extends State<ChainBuilderTab> {
 }
 
 // ============================================================================
-// VOLLBILD NOTFALL-KASKADEN-RUNNER (Inkl. Direkt-Moduswechsel ohne PIN!)
+// VOLLBILD NOTFALL-KASKADEN-RUNNER (Mit optischem & haptischem Countdown-Timer)
 // ============================================================================
 
 class EmergencyCascadeRunnerScreen extends StatefulWidget {
@@ -1167,11 +1315,92 @@ class _EmergencyCascadeRunnerScreenState
   late bool _isOutInPublic;
   int _currentIndex = 0;
 
+  Timer? _countdownTimer;
+  int _remainingSeconds = 0;
+  bool _isTimerRunning = false;
+  bool _timerCompleted = false;
+
   @override
   void initState() {
     super.initState();
     _chain = widget.initialChain;
     _isOutInPublic = widget.initialIsOutInPublic;
+    _prepareTimerForCurrentSkill();
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _prepareTimerForCurrentSkill() {
+    _countdownTimer?.cancel();
+    final totalSec = _chain.skills[_currentIndex].durationSeconds;
+    setState(() {
+      _remainingSeconds = totalSec > 0 ? totalSec : 0;
+      _isTimerRunning = false;
+      _timerCompleted = false;
+    });
+  }
+
+  void _toggleTimer() {
+    if (_isTimerRunning) {
+      _countdownTimer?.cancel();
+      HapticFeedback.lightImpact();
+      setState(() => _isTimerRunning = false);
+      return;
+    }
+
+    final totalSec = _chain.skills[_currentIndex].durationSeconds;
+    if (totalSec <= 0) return;
+
+    if (_remainingSeconds <= 0 || _timerCompleted) {
+      _remainingSeconds = totalSec;
+      _timerCompleted = false;
+    }
+
+    HapticFeedback.mediumImpact();
+    setState(() => _isTimerRunning = true);
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (_remainingSeconds > 1) {
+        setState(() => _remainingSeconds--);
+        // Letzte 3 Sekunden: Kräftigerer Impuls als Vorwarnung
+        if (_remainingSeconds <= 3) {
+          HapticFeedback.heavyImpact();
+        } else {
+          // Sanftes haptisches Sekunden-Metronom
+          HapticFeedback.selectionClick();
+        }
+      } else {
+        timer.cancel();
+        setState(() {
+          _remainingSeconds = 0;
+          _isTimerRunning = false;
+          _timerCompleted = true;
+        });
+        // Deutliches Doppel-Vibrieren bei Ablauf des Timers
+        await HapticFeedback.vibrate();
+        await Future.delayed(const Duration(milliseconds: 220));
+        await HapticFeedback.heavyImpact();
+      }
+    });
+  }
+
+  void _resetTimer() {
+    _countdownTimer?.cancel();
+    HapticFeedback.lightImpact();
+    setState(() {
+      _remainingSeconds = _chain.skills[_currentIndex].durationSeconds;
+      _isTimerRunning = false;
+      _timerCompleted = false;
+    });
   }
 
   Future<void> _setModeDirectly(bool targetPublicMode) async {
@@ -1201,14 +1430,18 @@ class _EmergencyCascadeRunnerScreenState
       _chain = nextChain;
       _currentIndex = 0;
     });
+    _prepareTimerForCurrentSkill();
 
     await widget.onModeChangedInsideRunner(targetPublicMode);
   }
 
   void _nextStep() {
+    HapticFeedback.mediumImpact();
     if (_currentIndex < _chain.skills.length - 1) {
       setState(() => _currentIndex++);
+      _prepareTimerForCurrentSkill();
     } else {
+      _countdownTimer?.cancel();
       _showEndOfChainDialog();
     }
   }
@@ -1227,6 +1460,7 @@ class _EmergencyCascadeRunnerScreenState
             onPressed: () {
               Navigator.pop(ctx);
               setState(() => _currentIndex = 0);
+              _prepareTimerForCurrentSkill();
             },
             child: const Text('Nochmal von vorn'),
           ),
@@ -1247,6 +1481,10 @@ class _EmergencyCascadeRunnerScreenState
     final currentSkill = _chain.skills[_currentIndex];
     final total = _chain.skills.length;
     final progress = (_currentIndex + 1) / total;
+    final hasTimer = currentSkill.durationSeconds > 0;
+    final timerProgress = hasTimer
+        ? (_remainingSeconds / currentSkill.durationSeconds).clamp(0.0, 1.0)
+        : 0.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
@@ -1287,7 +1525,7 @@ class _EmergencyCascadeRunnerScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // DIREKT-UMSCHALTER FÜR ZUHAUSE VS. UNTERWEGS (Geht komplett ohne PIN!)
+              // DIREKT-UMSCHALTER FÜR ZUHAUSE VS. UNTERWEGS
               Row(
                 children: [
                   Expanded(
@@ -1354,11 +1592,18 @@ class _EmergencyCascadeRunnerScreenState
 
               const Spacer(),
               Container(
-                padding: const EdgeInsets.all(28),
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E1E1E),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.redAccent, width: 2),
+                  border: Border.all(
+                    color: _timerCompleted
+                        ? Colors.greenAccent
+                        : (_isTimerRunning
+                            ? const Color(0xFF4FC3F7)
+                            : Colors.redAccent),
+                    width: 2.5,
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -1372,26 +1617,141 @@ class _EmergencyCascadeRunnerScreenState
                         letterSpacing: 1.2,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     Text(
                       currentSkill.title,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 28,
+                        fontSize: 26,
                         fontWeight: FontWeight.w900,
                         height: 1.2,
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 14),
                     Text(
                       currentSkill.description,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 19,
+                        fontSize: 17,
                         color: Colors.white70,
-                        height: 1.4,
+                        height: 1.35,
                       ),
                     ),
+
+                    // HAPTISCHER & OPTISCHER COUNTDOWN-BLOCK (wenn Dauer > 0)
+                    if (hasTimer) ...[
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.black38,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: _timerCompleted
+                                ? Colors.greenAccent
+                                : Colors.white24,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  _timerCompleted
+                                      ? Icons.verified_rounded
+                                      : Icons.timer_outlined,
+                                  color: _timerCompleted
+                                      ? Colors.greenAccent
+                                      : const Color(0xFF4FC3F7),
+                                  size: 28,
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  _timerCompleted
+                                      ? 'GESCHAFFT!'
+                                      : _formatClock(_remainingSeconds),
+                                  style: TextStyle(
+                                    fontSize: _timerCompleted ? 26 : 38,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 2.0,
+                                    color: _timerCompleted
+                                        ? Colors.greenAccent
+                                        : Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                value: _timerCompleted ? 1.0 : timerProgress,
+                                minHeight: 10,
+                                backgroundColor: Colors.white12,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  _timerCompleted
+                                      ? Colors.greenAccent
+                                      : (_remainingSeconds <= 3 &&
+                                              _isTimerRunning
+                                          ? Colors.amberAccent
+                                          : const Color(0xFF4FC3F7)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: _isTimerRunning
+                                          ? Colors.orange.shade800
+                                          : const Color(0xFF0288D1),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onPressed: _toggleTimer,
+                                    icon: Icon(
+                                      _isTimerRunning
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded,
+                                      size: 24,
+                                    ),
+                                    label: Text(
+                                      _isTimerRunning
+                                          ? 'PAUSE'
+                                          : (_timerCompleted
+                                              ? 'NOCHMAL STARTEN'
+                                              : 'TIMER STARTEN (${_formatDurationCompact(currentSkill.durationSeconds)})'),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (_remainingSeconds !=
+                                        currentSkill.durationSeconds ||
+                                    _timerCompleted) ...[
+                                  const SizedBox(width: 8),
+                                  IconButton.filledTonal(
+                                    tooltip: 'Timer zurücksetzen',
+                                    onPressed: _resetTimer,
+                                    icon: const Icon(Icons.refresh_rounded),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1420,10 +1780,10 @@ class _EmergencyCascadeRunnerScreenState
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
               SizedBox(
-                height: 56,
+                height: 52,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white70,

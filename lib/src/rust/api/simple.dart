@@ -7,79 +7,59 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `get_conn`, `get_steps_for_chain`, `seed_defaults_if_empty`
+// These functions are ignored because they are not marked as `pub`: `from_db_int`, `get_conn`, `load_chain_skills`, `map_skill_row`, `seed_defaults_if_empty`, `to_db_int`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`
 
-/// Initialisiert die SQLite-Datenbank im App-Verzeichnis und legt Basis-Skills + zwei Beispielketten an.
 Future<void> initDb({required String appDir}) =>
     RustLib.instance.api.crateApiSimpleInitDb(appDir: appDir);
 
-/// Liest den zuletzt gewählten Modus (false = Privat/Zuhause, true = Unterwegs) aus der DB.
 Future<bool> getPublicMode() =>
     RustLib.instance.api.crateApiSimpleGetPublicMode();
 
-/// Speichert den gewählten Modus dauerhaft in der DB (für das Homescreen-Widget).
 Future<void> setPublicMode({required bool isOutInPublic}) => RustLib
     .instance
     .api
     .crateApiSimpleSetPublicMode(isOutInPublic: isOutInPublic);
 
-/// Holt alle Skills, optional gefiltert nach Anspannungszone.
 Future<List<Skill>> getSkills({TensionZone? zoneFilter}) =>
     RustLib.instance.api.crateApiSimpleGetSkills(zoneFilter: zoneFilter);
 
-/// Fügt einen neuen eigenen Skill hinzu.
-Future<Skill> addCustomSkill({
+Future<PlatformInt64> addCustomSkill({
   required String title,
   required String description,
   required TensionZone zone,
   required bool onlyPrivate,
+  required int durationSeconds,
 }) => RustLib.instance.api.crateApiSimpleAddCustomSkill(
   title: title,
   description: description,
   zone: zone,
   onlyPrivate: onlyPrivate,
+  durationSeconds: durationSeconds,
 );
 
-/// Aktualisiert einen bestehenden Skill (Name, Beschreibung, Zone, Privat-Status).
 Future<void> updateSkill({
   required PlatformInt64 skillId,
   required String title,
   required String description,
   required TensionZone zone,
   required bool onlyPrivate,
+  required int durationSeconds,
 }) => RustLib.instance.api.crateApiSimpleUpdateSkill(
   skillId: skillId,
   title: title,
   description: description,
   zone: zone,
   onlyPrivate: onlyPrivate,
+  durationSeconds: durationSeconds,
 );
 
-/// Löscht einen Skill (entfernt ihn durch ON DELETE CASCADE auch automatisch aus Ketten).
 Future<void> deleteSkill({required PlatformInt64 skillId}) =>
     RustLib.instance.api.crateApiSimpleDeleteSkill(skillId: skillId);
 
-/// Lädt alle gespeicherten Skillketten inklusive ihrer sortierten Skills.
 Future<List<SkillChain>> getAllChains() =>
     RustLib.instance.api.crateApiSimpleGetAllChains();
 
-/// Holt gezielt die passende Notfallkette für den aktuellen Modus (Zuhause vs. Unterwegs).
-Future<SkillChain?> getActiveEmergencyChain({required bool isOutInPublic}) =>
-    RustLib.instance.api.crateApiSimpleGetActiveEmergencyChain(
-      isOutInPublic: isOutInPublic,
-    );
-
-/// Speichert die neu sortierte Reihenfolge (aus dem Drag & Drop Editor in Flutter) für eine Kette.
-Future<void> updateChainSteps({
-  required PlatformInt64 chainId,
-  required Int64List orderedSkillIds,
-}) => RustLib.instance.api.crateApiSimpleUpdateChainSteps(
-  chainId: chainId,
-  orderedSkillIds: orderedSkillIds,
-);
-
-/// Erstellt eine neue leere Skillkette und gibt ihre ID zurück.
 Future<PlatformInt64> createChain({
   required String name,
   required bool setForPrivate,
@@ -90,7 +70,6 @@ Future<PlatformInt64> createChain({
   setForPublic: setForPublic,
 );
 
-/// Legt fest, welche Kette für "Privat / Zuhause" oder "Unterwegs" beim Druck auf den Notfallknopf startet.
 Future<void> setActiveChainForMode({
   required PlatformInt64 chainId,
   required bool forPublicMode,
@@ -99,21 +78,36 @@ Future<void> setActiveChainForMode({
   forPublicMode: forPublicMode,
 );
 
+Future<void> updateChainSteps({
+  required PlatformInt64 chainId,
+  required Int64List orderedSkillIds,
+}) => RustLib.instance.api.crateApiSimpleUpdateChainSteps(
+  chainId: chainId,
+  orderedSkillIds: orderedSkillIds,
+);
+
+Future<SkillChain?> getActiveEmergencyChain({required bool isOutInPublic}) =>
+    RustLib.instance.api.crateApiSimpleGetActiveEmergencyChain(
+      isOutInPublic: isOutInPublic,
+    );
+
 class Skill {
   final PlatformInt64 id;
   final String title;
   final String description;
   final TensionZone zone;
-  final bool onlyPrivate;
   final bool isCustom;
+  final bool onlyPrivate;
+  final int durationSeconds;
 
   const Skill({
     required this.id,
     required this.title,
     required this.description,
     required this.zone,
-    required this.onlyPrivate,
     required this.isCustom,
+    required this.onlyPrivate,
+    required this.durationSeconds,
   });
 
   @override
@@ -122,8 +116,9 @@ class Skill {
       title.hashCode ^
       description.hashCode ^
       zone.hashCode ^
+      isCustom.hashCode ^
       onlyPrivate.hashCode ^
-      isCustom.hashCode;
+      durationSeconds.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -134,8 +129,9 @@ class Skill {
           title == other.title &&
           description == other.description &&
           zone == other.zone &&
+          isCustom == other.isCustom &&
           onlyPrivate == other.onlyPrivate &&
-          isCustom == other.isCustom;
+          durationSeconds == other.durationSeconds;
 }
 
 class SkillChain {
@@ -173,14 +169,4 @@ class SkillChain {
           skills == other.skills;
 }
 
-enum TensionZone {
-  low,
-  high,
-  emergency;
-
-  static Future<TensionZone> fromDbInt({required int val}) =>
-      RustLib.instance.api.crateApiSimpleTensionZoneFromDbInt(val: val);
-
-  Future<int> toDbInt() =>
-      RustLib.instance.api.crateApiSimpleTensionZoneToDbInt(that: this);
-}
+enum TensionZone { low, high, emergency }
