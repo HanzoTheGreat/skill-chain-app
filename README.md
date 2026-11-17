@@ -19,6 +19,9 @@ Wenn die Anspannung über 70 % steigt, setzt das rationale Abwägen aus. Statt d
 * **Backend:** Rust + `rusqlite` (`bundled`-Feature – SQLite wird direkt in die Rust-Binary kompiliert)
 * **Native Android-Integration:** Kotlin `AppWidgetProvider`, `TileService` (Quick-Settings-Kachel) & Lockscreen-Handling (`showWhenLocked`)
 
+## 📲 Direkt-Download (Android APK)
+👉 **[Hier klicken, um die aktuelle `Skill-Akut-Hilfe-latest.apk` direkt herunterzuladen](https://github.com/HanzoTheGreat/skill-chain-app/releases/download/latest/Skill-Akut-Hilfe-latest.apk)**
+
 ## 🚀 Selbst bauen (Build Instructions)
 
 ### Voraussetzungen
