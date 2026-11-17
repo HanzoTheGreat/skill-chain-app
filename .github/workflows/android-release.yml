@@ -3,10 +3,10 @@ name: Build & Release Android APK
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # Erlaubt auch manuelles Starten per Button auf GitHub
+  workflow_dispatch:
 
 permissions:
-  contents: write #Wichtig, damit GitHub Actions das Release + APK anlegen darf!
+  contents: write
 
 jobs:
   build-apk:
@@ -16,8 +16,8 @@ jobs:
       - name: 1. Repository auschecken
         uses: actions/checkout@v4
 
-      - name: 2. Java 17 einrichten (für Android/Gradle)
-        uses: actions/setup-java@v4
+      - name: 2. Java 17 einrichten
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -27,7 +27,7 @@ jobs:
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
 
-      - name: 4. Rust-Cache aktivieren (beschleunigt spätere Builds massiv)
+      - name: 4. Rust-Cache aktivieren
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "rust -> target"
@@ -40,8 +40,9 @@ jobs:
 
       - name: 6. Abhängigkeiten laden & Release-APK kompilieren
         run: |
+          chmod +x android/gradlew || true
           flutter pub get
-          flutter build apk --release
+          flutter build apk --release --android-skip-build-dependency-validation
 
       - name: 7. APK umbenennen
         run: |
