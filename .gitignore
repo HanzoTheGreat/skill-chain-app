@@ -1,0 +1,33 @@
+# Flutter / Dart / Pub
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/
+
+# Rust Build-Artefakte
+rust/target/
+**/target/
+**/*.rs.bk
+
+# Android / Gradle / Signatur-Geheimnisse (NIEMALS hochladen!)
+**/android/**/gradle-wrapper.jar
+**/android/.gradle
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/key.properties
+*.jks
+*.keystore
+
+# Lokale SQLite-Testdatenbanken
+*.sqlite
+*.sqlite3
+*.db

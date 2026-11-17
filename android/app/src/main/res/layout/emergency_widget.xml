@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#1E1E1E"
+    android:orientation="horizontal"
+    android:padding="4dp">
+
+    <!-- LINKE SEITE: ROTER NOTFALL-BUTTON (Startet sofort die Kaskade) -->
+    <LinearLayout
+        android:id="@+id/emergency_widget_trigger"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:background="#D32F2F"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="⚠️ NOTFALL-KASKADE"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_subtitle_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:gravity="center"
+            android:text="Startet: 🏠 Zuhause-Kette"
+            android:textColor="#FFCDD2"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- RECHTE SEITE: MODUS-UMSCHALTER (Schaltet direkt auf dem Homescreen um) -->
+    <LinearLayout
+        android:id="@+id/emergency_widget_mode_toggle"
+        android:layout_width="96dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="4dp"
+        android:background="#2C2C2C"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <TextView
+            android:id="@+id/widget_mode_icon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="🏠"
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/widget_mode_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:gravity="center"
+            android:text="ZUHAUSE"
+            android:textColor="#69F0AE"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Antippen"
+            android:textColor="#9E9E9E"
+            android:textSize="9sp" />
+    </LinearLayout>
+
+</LinearLayout>
