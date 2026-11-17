@@ -1,0 +1,61 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # Erlaubt auch manuelles Starten per Button auf GitHub
+
+permissions:
+  contents: write #Wichtig, damit GitHub Actions das Release + APK anlegen darf!
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: 2. Java 17 einrichten (für Android/Gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 3. Rust Toolchain + Android Targets installieren
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: 4. Rust-Cache aktivieren (beschleunigt spätere Builds massiv)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust -> target"
+
+      - name: 5. Flutter SDK einrichten
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: 6. Abhängigkeiten laden & Release-APK kompilieren
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - name: 7. APK umbenennen
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk Skill-Akut-Hilfe-latest.apk
+
+      - name: 8. APK unter GitHub Releases veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Aktueller Android-Build (APK)"
+          body: |
+            ### 📲 Direkt-Download für Android
+            Lade die Datei **`Skill-Akut-Hilfe-latest.apk`** unten unter *Assets* herunter und tippe sie auf deinem Android-Smartphone an, um die App zu installieren.
+            
+            *Automatisch gebaut aus Commit `${{ github.sha }}`.*
+          files: Skill-Akut-Hilfe-latest.apk
+          prerelease: false
